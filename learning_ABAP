@@ -1,0 +1,332 @@
+*&---------------------------------------------------------------------*
+*& Report  Z24_TESTBAX
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT  Z24_TESTBAX.
+
+*****записи*****************************************************************************
+*
+*data: begin of customer,
+*  id(8) type n,
+*  name type t_name,
+*  telephone(12),
+*  end of customer.
+*
+*  customer-id = '87654321'.
+*  customer-name = 'Edison'.
+*  customer-telephone = '111-111-1111'.
+*  DATA vendor LIKE customer.
+*  move customer to vendor.
+*  write:/ vendor.
+*
+*CONSTANTS: begin of path,
+*  root(3) value 'a:\',
+*  home_dir(5) value 'home\',
+*  end of path.
+*
+*write:/ path.
+
+*****дата*****************************************************************************
+*
+*data ultimo type d.
+*ultimo = sy-datum.      "текущая дата
+*ultimo+6(2) = '01'.     "меняем число на 01(YYYYMMDD) и потом
+*subtract 1 from ultimo. "смещяемся на 1 день назад
+*write / ultimo.
+*write (10) ultimo.
+*ultimo = sy-datum + 7. "через неделю
+*ultimo(4) = ultimo(4) + 7. "через 7 лет
+*WRITE / ultimo.
+
+*****таблицы***************************************************************************
+*
+*TYPES: BEGIN OF tabl_type,
+*  gjahr TYPE bkpf-gjahr,
+*  bukrs TYPE bkpf-bukrs,
+*END OF tabl_type.
+*
+*data wa_tabl type tabl_type.
+*
+*START-OF-SELECTION.
+*
+*select gjahr bukrs
+*into corresponding fields of wa_tabl
+*up to 20 rows
+*from bkpf
+*where gjahr = '2019' and bukrs = '1132'.
+*  WRITE / wa_tabl-gjahr.
+*  WRITE wa_tabl-bukrs.
+*endselect.
+*
+*WRITE wa_tabl.
+*END-OF-SELECTION.
+*
+*check lines( lt_bkpf ) > 0.
+*select
+*  *
+*from
+*  bsis
+*into corresponding fields of table
+*  lt_bsis
+*for all entries in
+*  lt_bkpf
+*where
+*  bsis~bukrs = lt_bkpf-bukrs and
+*  bsis~belnr = lt_bkpf-belnr and
+*  bsis~gjahr = '2019'.
+*
+*DATA all_MAKT LIKE MAKT OCCURS 100 WITH HEADER LINE.
+*SELECT * FROM MAKT INTO TABLE all_MAKT.
+*LOOP AT all_MAKT.
+*  WRITE: / all_MAKT.
+*ENDLOOP.
+*
+*DATA count_MATNR TYPE i.
+*SELECT COUNT(*) FROM EKPO INTO count_MATNR "кол-во элеменотов в таблице
+*  WHERE MATNR = '%3185480345'.
+*  WRITE count_MATNR.
+*
+*DATA: BEGIN OF con_tab,
+*  txz01 LIKE 'С%',
+*  bukrs LIKE '2171',
+*  END OF con_tab.
+*DATA: BEGIN OF all_cust occurs 50,
+*  txz01 TYPE EKPO-txz01,
+*  bukrs TYPE EKPO-bukrs,
+*  END OF all_cust.
+*SELECT EKPO~txz01 EKPO~bukrs FROM EKPO INTO TABLE all_cust
+*  WHERE (con_tab) and EKPO~MANDT = 601. "динамическое использование where
+*  WRITE: / all_cust.
+*
+*TABLES EKPO.
+*SELECT-OPTIONS s_AEDAT FOR EKPO-AEDAT. "ввод пользователем критериев поиска
+*SELECT * FROM EKPO                     "так же можно употреблять внутри цикла для внутр. табл.
+*  WHERE AEDAT in s_AEDAT.
+*  WRITE / EKPO-AEDAT.
+*  ENDSELECT.
+*
+*SELECT-OPTIONS s_ebeln FOR result_table-ebeln.
+*LOOP AT result_table
+*  WHERE: ebeln in s_ebeln.
+*  WRITE: / result_table-ebeln,'|', result_table-matnr,'|', result_table-txz01,'|', result_table-maktx,'|', result_table-aedat,'|'.
+*ENDLOOP.
+   "во внутр табл вставка в конец appen (можно вставлять таблицы append lines of old_cust to all_cust задание диапозона строк из исх. from x to y)
+   "позиционная вставка insert cust_cities index 3. lines of old_cities from 2 to 5 into cust_cities index 3. остальное смещает. быстрее чем циклом.
+   "sort my_flights "by fldate price сортировка вн. табл.
+
+*****операции с данными***************************************************************
+*
+*data: name(25), count type i.
+*
+*move: 'Edison' to name, 17 to count. "move исходное to: целевое, целевое.
+*compute count = 21. " целевое = исходное. множественное копирование: a = b = исходное.
+**копирование структ.обьектов (move-corresponding исходное to целевое.) в аналогичные(с одинаковыми именами, если разный тип то преобразуются) поля не зависимо от их порядка
+**move копирует поля с одинаковыми типом и длинной, а имена могут отличаться
+*data personal TYPE personal_data. "name в обоих есть
+*MOVE-CORRESPONDING customer to personal.
+*
+*data: first(5), middle(4), last(6), full(45).
+*first = 'Con'.
+*middle = 'ca'.
+*last = 'tenate'.
+*CONCATENATE first middle last INTO full SEPARATED BY '-'. "разделяет строки
+*if sy-subrc = 0."если при обьеденении строка будет больше то будет не 0.
+*   WRITE / full.
+*   first = ''.
+*   middle = ''.
+*   last = ''.
+*   ENDIF.
+*data tabl like full occurs 3.
+*SPLIT full AT '-' INTO first middle last.
+*SPLIT full AT '-' INTO TABLE tabl.
+*if sy-subrc = 0."если при разделении строка будет больше то будет не 0 а результат усекается.
+*   WRITE: / first, middle, last.
+**   loop at tabl. "where field1+7(1) = ‘2’. возможно условие вывода (тут каждый 8ой символ равен 2)
+**     write/ tabl.
+**     endloop.
+*   ENDIF.
+*SHIFT full UP TO 'ca'. "сдвиг до символа и если не найдена то sy-subrc не 0 , shift full - сдвиг на 1 символ , shift full by n places - сдвиг на n символов.
+*SHIFT full RIGHT DELETING TRAILING space. " удаляет пробелы в конце
+**REPLACE 'a' WITH '*' INTO full. "заменить первый попавшийся символ а на *
+*TRANSLATE full USING 'a*t&'. "заменить все а на * и t на &
+*WRITE / full .
+**поиск в строках и внутр табл.
+*data text(45) VALUE 'Texas California New Mexico Louisiana Oregon'.
+*SEARCH text FOR 'california'.
+*IF sy-subrc ne 0.
+*  WRITE 'Not found'.
+*  ELSE.
+*    WRITE / sy-fdpos. " сдвиг найденой строки
+*ENDIF.
+*append text TO tabl.
+*SEARCH tabl FOR 'New' STARTING AT 1 ENDING AT 4. "искать в таблице 'new' с 1 по 4 строки(не обязательно).
+*if sy-subrc = 0.
+*  WRITE:/ 'sy-tabix=', sy-tabix, ' sy-fdpos=', sy-fdpos.
+*  ENDIF.
+*move text+6(10) to full+8(10). "передаем выбранные символы исходного в часть целевого
+*WRITE: / full.
+
+****компановка визуалка******************************************************************
+*
+*PROGRAM z24_testbax NO STANDARD PAGE HEADING.
+*DATA counter(9) TYPE n.
+*NEW-PAGE LINE-SIZE 44.
+*DO 40 TIMES.
+*  counter = sy-index.
+*  WRITE counter.
+*ENDDO.
+*
+*WRITE 'text number one' no-gap.
+*new-LINE.
+*WRITE: 'New line', / 'Yet another line'.
+*skip 3.
+*WRITE / 'skip 3 produces three empty lines'.
+*NEW-LINE.
+*WRITE AT 5 'position 5'.
+*NEW-LINE.
+*WRITE AT 10(22) 'position 20, length 20'.
+*
+*INCLUDE <symbol>.
+*INCLUDE <icon>.
+*WRITE: / sym_phone as SYMBOL, 'telephone' COLOR COL_TOTAL,
+*       / sym_fax as SYMBOL, 'fax' COLOR COL_GROUP INTENSIFIED off,
+*       / sym_left_hand as SYMBOL, 'hand point',
+*       / sym_caution as SYMBOL, 'caution',
+*       / icon_checked as icon, 'checked; okay' COLOR COL_NEGATIVE,
+*       / icon_delete as icon, 'delete',
+*       / icon_print as icon, 'print'.
+*FORMAT COLOR COL_HEADING.
+*WRITE / 'Header'.
+*FORMAT COLOR OFF.
+*WRITE: /, AT (8) '123456' COLOR COL_KEY USING EDIT MASK '__:__:__' .
+*WRITE: / 'original text'(001),"текст на первом языке
+*       / text-002.            "текст на втором языке
+
+****события условия циклы******************************************************************
+*
+*DATA: BEGIN OF bkpf_tabl,
+*  bldat TYPE bkpf-bldat,
+*  usnam TYPE bkpf-usnam,
+*  END OF bkpf_tabl.
+*DATA i TYPE i VALUE 0.
+*
+*  SELECT BLDAT USNAM into corresponding fields of bkpf_tabl FROM bkpf up to 20 rows.
+*  WRITE: / bkpf_tabl-bldat, bkpf_tabl-usnam.
+*ENDSELECT.
+*
+*AT LINE-SELECTION." при двойном щелчке на какой-либо строке будут выполнены все команды до следующего оператора события или конца программы
+*
+*  CASE i.
+*    WHEN 0. WRITE: / 'Молодец! ' COLOR COL_TOTAL, i .
+*    WHEN 1. WRITE: / 'Молодец! ' COLOR COL_GROUP, i .
+*    WHEN OTHERS. WRITE: / 'Молодец! ' COLOR COL_NEGATIVE, i .
+*  ENDCASE.
+*
+*  IF not i < 0. "эквивалентно not ( i < 0 ). 1)not 2)and 3)or
+*    i = i + 1.
+*  ELSEIF i = 0.
+*    i = i + 1.
+*  ELSE.
+*    i = i - 1.
+*  ENDIF.
+*
+*DATA: a(6) VALUE 'ABAP/4',
+*      result(6).
+*IF a ca 'XP'. " ca -любой символ из перечисленых. co -содеожит только(в любом порядке). cs -содержит строку(пробелы и регистр игнорируются). cp -содержит шаблон
+*  result = a+sy-fdpos(3).
+*  WRITE / result.
+*IF a cp '*AP++'.
+*  result = a+sy-fdpos(4).
+*  WRITE / result.
+*ENDIF.
+*ENDIF.
+*
+*DO 100 TIMES.
+*  i = sy-index ** 2.
+*  WRITE i.
+*ENDDO.
+*NEW-LINE.
+*DO.
+*  IF sy-index > 5 . exit. ENDIF."contine - прервать щаг и продолжить со следующего
+*  write sy-index.
+*ENDDO.
+*WHILE sy-index <> 5.
+*  IF sy-index > 3. Exi. ENDIF.
+*  write sy-index.
+*ENDWHILE.
+
+****формы функции******************************************************************
+*
+*DATA name(25) VALUE 'A'.
+*
+*WRITE name.
+*PERFORM set_name CHANGING name.
+*WRITE name.
+*
+*FORM set_name CHANGING c_name LIKE name. "changing value -только для чтения(по значению). using value -изменяемые(по ссылке).
+*  c_name = 'Smith'.                      "тип переменной не обязателен, нет - проверки перед выполнением не будет
+*ENDFORM.
+*
+*data all_bkpf LIKE BKPF occurs 50 WITH HEADER LINE.
+*START-OF-SELECTION.
+*PERFORM read_bkpf TABLES all_bkpf.
+*
+*FORM read_bkpf TABLES f_bkpf STRUCTURE all_bkpf. "заполняет внутренюю таблицу данными из таблицы
+*  SELECT * from bkpf INTO TABLE f_bkpf.
+*ENDFORM.
+*
+*FORM pipis CHANGING pi.
+*  pi = pi + 1.
+*ENDFORM.
+*
+*CALL FUNCTION 'SELICT_EKPO_MAKT' EXPORTING i_rows = 50.
+*
+
+****Выборка заказов с некорректно заполнеными наименованиями******************************************************************
+*
+TABLES EKPO.
+TABLES MAKT.
+TABLES EKKO.
+SELECT-OPTIONS: s_EBELN FOR EKPO-EBELN DEFAULT '45*' OPTION CP, s_BEDAT FOR EKKO-BEDAT, s_WERKS FOR EKPO-WERKS, s_EKORG FOR EKKO-EKORG.
+
+PARAMETERS: i_rows TYPE i DEFAULT 100 .
+
+*проверка введенных данных
+IF i_rows > 0 or i_rows = ''. PERFORM select_diff_MAKT_rows. ELSE. WRITE 'error: количество строк должно быть больше или равно 0'. ENDIF.
+
+FORM select_diff_MAKT_rows.
+DATA: BEGIN OF result_table occurs 100, "поставить 0 для того чтобы сама выделила память
+  ebeln TYPE EKPO-EBELN, "заказы
+  matnr TYPE EKPO-MATNR, "номер материала
+  txz01 TYPE EKPO-TXZ01, "краткий текст
+  maktx TYPE MAKT-MAKTX, "НаименованиеX в справочнике
+  maktg TYPE MAKT-MAKTG, "НаименованиеG в справочнике
+  bedat TYPE EKKO-BEDAT, "дата создания записи
+  werks TYPE EKPO-WERKS, "завод
+  ekorg TYPE EKKO-EKORG, "Закупочная организация
+  END OF result_table.
+
+WRITE: / '№ док-та   |', 'Номер материала    |', 'Краткий текст                            |', 'Наименование в справочникеX              |', 'Наименование в справочникеG              |', 'Дата созд. |','Завод|', 'З.орг|'.
+WRITE: / '___________|', '___________________|', '_________________________________________|', '_________________________________________|', '_________________________________________|', '___________|','_____|', '_____|'.
+select EKPO~EBELN EKPO~MATNR EKPO~TXZ01 MAKT~MAKTX MAKT~MAKTG EKKO~BEDAT EKPO~WERKS EKKO~EKORG
+  up to i_rows rows
+  FROM EKPO INNER JOIN MAKT ON MAKT~MATNR = EKPO~MATNR INNER JOIN EKKO ON EKKO~EBELN = EKPO~EBELN
+  into corresponding fields of result_table
+  WHERE: MAKT~SPRAS = 'RU' and EKPO~EBELN in s_EBELN and EKKO~BEDAT in s_BEDAT and EKKO~EKORG in s_EKORG and ( MAKT~MAKTX <> EKPO~TXZ01 or MAKT~MAKTG <> EKPO~TXZ01 ).
+  WRITE: / result_table-ebeln,'|', result_table-matnr,'|', result_table-txz01,'|', result_table-maktx,'|', result_table-maktg,'|', result_table-bedat,'|', result_table-werks,'|',result_table-ekorg,'|'.
+  ENDSELECT.
+  ENDFORM.
+
+
+****поиск неразрывного пробела******************************************************************
+*
+*TABLES MAKT.
+*  DATA: makt_table LIKE MAKT occurs 0 WITH HEADER LINE.
+*SELECT * FROM MAKT
+*  INTO TABLE makt_table
+*  WHERE MAKTX LIKE '% %'.
+*  WRITE / makt_table-maktx.
