@@ -147,6 +147,11 @@ REPORT  Z24_TESTBAX.
 *  WRITE: / planfli-cityfrom, planfli-cityto, sum(actfli-seatsocc).
 *  ENDAT.
 *ENDLOOP.
+*
+*FIELD-GROUPS: header, connections, flights.
+*INSERT: result_table-ebeln EKKO_table-ebeln INTO header,
+*  result_table-matnr result_table-txz01 result_table-werks result_table-maktx result_table-maktg INTO connections,
+*  EKKO_table-bedat EKKO_table-ekorg INTO flights.
 
 *****операции с данными***************************************************************
 *
@@ -370,18 +375,20 @@ REPORT  Z24_TESTBAX.
 *  ENDLOOP.
 *ENDIF.
 
+
+
 ****Выборка заказов с некорректно заполнеными наименованиями******************************************************************
 *
 TABLES: EKPO, MAKT, EKKO.
-SELECT-OPTIONS: s_EBELN FOR EKPO-EBELN DEFAULT '45*' OPTION CP, s_BEDAT FOR EKKO-BEDAT, s_WERKS FOR EKPO-WERKS, s_EKORG FOR EKKO-EKORG.
-
+SELECT-OPTIONS: s_EBELN FOR EKPO-EBELN DEFAULT '45*' OPTION CP, s_BEDAT FOR EKKO-BEDAT, s_WERKS FOR EKPO-WERKS, s_EKORG FOR EKKO-EKORG .
 PARAMETERS: i_rows TYPE i DEFAULT 100.
 
+*
 *проверка введенных данных
-IF i_rows > 0 or i_rows = ''. PERFORM select_diff_MAKT. ELSE. WRITE 'error: количество строк должно быть больше или равно 0'.
+IF i_rows > 0 or i_rows = ''. PERFORM EKPO_diff_MAKT. ELSE. WRITE 'error: количество строк должно быть больше или равно 0'.
   ENDIF.
 
-FORM select_diff_MAKT_old.
+FORM EKPO_diff_MAKT_old.
 DATA: BEGIN OF result_table occurs 100, "поставить 0 для того чтобы сама выделила память
   ebeln TYPE EKPO-EBELN, "заказы
   matnr TYPE EKPO-MATNR, "номер материала
@@ -397,95 +404,107 @@ select EKPO~EBELN EKPO~MATNR EKPO~TXZ01 MAKT~MAKTX MAKT~MAKTG EKKO~BEDAT EKPO~WE
   up to i_rows rows
   FROM EKPO INNER JOIN MAKT ON MAKT~MATNR = EKPO~MATNR INNER JOIN EKKO ON EKKO~EBELN = EKPO~EBELN
   into corresponding fields of result_table
-  WHERE: MAKT~SPRAS = 'RU' and ( MAKT~MAKTX <> EKPO~TXZ01 or MAKT~MAKTG <> EKPO~TXZ01 ) and EKPO~EBELN in s_EBELN and EKKO~BEDAT in s_BEDAT and EKPO~WERKS in s_WERKS and EKKO~EKORG in s_EKORG.
+  WHERE: MAKT~SPRAS = 'RU' and ( MAKT~MAKTX <> EKPO~TXZ01 and MAKT~MAKTG <> EKPO~TXZ01 ) and EKPO~EBELN in s_EBELN and EKKO~BEDAT in s_BEDAT and EKPO~WERKS in s_WERKS and EKKO~EKORG in s_EKORG.
   WRITE: / result_table-ebeln,'|', result_table-matnr,'|', result_table-txz01,'|', result_table-maktx,'|', result_table-maktg,'|', result_table-bedat,'|', result_table-werks,'|',result_table-ekorg,'|'.
   ENDSELECT.
   ENDFORM.
 
-FORM select_diff_MAKT.
+FORM EKPO_diff_MAKT_old2.
 
-TYPES:BEGIN OF EKKO_table,
+TYPES:
+  BEGIN OF EKKO_table,
     ebeln TYPE EKKO-EBELN, "заказы(key)
     bedat TYPE EKKO-BEDAT, "дата создания записи
     ekorg TYPE EKKO-EKORG, "Закупочная организация
     END OF EKKO_table,
 
-      BEGIN OF result_table,
+  BEGIN OF EKPOMAKT_table,
     ebeln TYPE EKPO-EBELN, "заказы(key)
     matnr TYPE EKPO-MATNR, "номер материала(key)
     txz01 TYPE EKPO-TXZ01, "краткий текст
     werks TYPE EKPO-WERKS, "завод
-*    matnr LIKE MAKT-MATNR, "номер материала(key)
+*    matnr TYPE MAKT-MATNR, "номер материала(key)
     maktx TYPE MAKT-MAKTX, "НаименованиеX в справочнике
     maktg TYPE MAKT-MAKTG, "НаименованиеG в справочнике
-    bedat TYPE EKKO-BEDAT,
-    ekorg TYPE EKKO-EKORG,
-    ebeln2 TYPE EKKO-EBELN, "заказы(key)
-*    EKKO_table TYPE EKKO_t occurs 100,
-    END OF result_table.
+    END OF EKPOMAKT_table.
 
 DATA: EKKO_table TYPE TABLE OF EKKO_table WITH HEADER LINE,
-      result_table TYPE TABLE OF result_table WITH HEADER LINE.
-
-*FIELD-GROUPS: header, connections, flights.
-*INSERT: result_table-ebeln EKKO_table-ebeln INTO header,
-*  result_table-matnr result_table-txz01 result_table-werks result_table-maktx result_table-maktg INTO connections,
-*  EKKO_table-bedat EKKO_table-ekorg INTO flights.
+      EKPOMAKT_table TYPE TABLE OF EKPOMAKT_table WITH HEADER LINE,
+      end_EBELN TYPE EKPO-EBELN.
 
 SELECT EKPO~EBELN EKPO~MATNR EKPO~TXZ01 EKPO~WERKS MAKT~MAKTX MAKT~MAKTG
   up to i_rows rows
   FROM EKPO INNER JOIN MAKT ON MAKT~MATNR = EKPO~MATNR
-  into TABLE result_table
-  WHERE: MAKT~SPRAS = 'RU' and ( MAKT~MAKTX <> EKPO~TXZ01 or MAKT~MAKTG <> EKPO~TXZ01 ) and EKPO~EBELN in s_EBELN and EKPO~WERKS in s_WERKS
+  into TABLE EKPOMAKT_table
+  WHERE: MAKT~SPRAS = 'RU' and ( MAKT~MAKTX <> EKPO~TXZ01 and MAKT~MAKTG <> EKPO~TXZ01 ) and EKPO~EBELN in s_EBELN and EKPO~WERKS in s_WERKS
   ORDER BY EKPO~EBELN.
-*  ENDSELECT.
 
-WRITE: / '№ док-та   |', '№ док-та ek|', 'Номер материала    |', 'Краткий текст                            |', 'Наименование в справочникеX              |', 'Наименование в справочникеG              |','Завод|'.
-WRITE: / '___________|', '___________|', '___________________|', '_________________________________________|', '_________________________________________|', '_________________________________________|','_____|'.
+IF EKPOMAKT_table[] IS NOT INITIAL.
+  data lin type p.                      "занесение в переменную последнего заказа
+  describe table EKPOMAKT_table lines lin."для ограничения второй выгрузки
+  read table EKPOMAKT_table index lin. "последняя запись
+  end_EBELN = EKPOMAKT_table-ebeln.
 
 SELECT EKKO~EBELN EKKO~BEDAT EKKO~EKORG
   up to i_rows rows
   FROM EKKO
-  INTO EKKO_table
-  "into (result_table-ebeln2, result_table-bedat, result_table-ekorg)
-  WHERE: EKKO~EBELN in s_EBELN and EKKO~BEDAT in s_BEDAT and EKKO~EKORG in s_EKORG
+  INTO TABLE EKKO_table
+  "into (EKPOMAKT_table-ebeln2, EKPOMAKT_table-bedat, EKPOMAKT_table-ekorg)
+  WHERE: EKKO~EBELN in s_EBELN AND EKKO~BEDAT in s_BEDAT AND EKKO~EKORG in s_EKORG AND EKKO~EBELN <= end_EBELN "ограничение заказов учитывая первый запрос, не обрабатывает пустоту
   ORDER BY EKKO~EBELN.
-*  "INSERT result_table INDEX sy-tabix.
-*  "APPEND result_table.
-  READ TABLE result_table INDEX sy-tabix.
-*  READ TABLE EKKO_table INDEX sy-tabix.
-*  result_table-ebeln2 = EKKO_table-ebeln.
-*  result_table-bedat = EKKO_table-bedat.
-*  result_table-ekorg = EKKO_table-ekorg.
-*  MODIFY: result_table INDEX sy-tabix.
-  "вывод на экран
-  WRITE: / result_table-ebeln,'|',
-           EKKO_table-ebeln,'|',
-           result_table-matnr,'|',
-           result_table-txz01,'|',
-           result_table-maktx,'|',
-           result_table-maktg,'|',
-           result_table-werks,'|',
-           EKKO_table-bedat,'|',
-           EKKO_table-ekorg,'|'.
-  ENDSELECT.
+*  "INSERT EKPOMAKT_table INDEX sy-tabix.
+*  "APPEND EKPOMAKT_table.
+*  MODIFY: EKPOMAKT_table INDEX sy-tabix.
+*  ENDSELECT.
+  else.
+    WRITE 'error: инициализации EKPOMAKT_table'.  EXIT.
+ENDIF.
 
-
-*LOOP AT result_table.
-*  WRITE: / result_table-ebeln,'|',
-*           result_table-ebeln2,'|',
-*           result_table-matnr,'|',
-*           result_table-txz01,'|',
-*           result_table-maktx,'|',
-*           result_table-maktg,'|',
-*           result_table-werks,'|',
-*           result_table-bedat,'|',
-*           result_table-ekorg,'|'.
-*  " EKKO_table-bedat,'|', EKKO_table-ekorg,'|'.
-*ENDLOOP.
+IF EKPOMAKT_table[] IS NOT INITIAL and EKKO_table[] IS NOT INITIAL. "рисуем результат
+WRITE: / '№ док-та   |', 'Номер материала    |', 'Краткий текст                            |', 'Наименование в справочникеX              |', 'Наименование в справочникеG              |','Завод|','Дата созд. |','Закуп|'.
+WRITE: / '___________|', '___________________|', '_________________________________________|', '_________________________________________|', '_________________________________________|','_____|','___________|','_____|'.
+LOOP AT EKPOMAKT_table.
+  IF EKPOMAKT_table-maktx = EKPOMAKT_table-txz01 or EKPOMAKT_table-maktg = EKPOMAKT_table-txz01.
+    WRITE / 'error: записи равны'.
+  ELSE.
+    WRITE: / EKPOMAKT_table-ebeln,'|',
+             EKPOMAKT_table-matnr,'|',
+             EKPOMAKT_table-txz01,'|',
+             EKPOMAKT_table-maktx,'|',
+             EKPOMAKT_table-maktg,'|',
+             EKPOMAKT_table-werks,'|'.
+    LOOP AT EKKO_table WHERE ebeln = EKPOMAKT_table-ebeln.
+      WRITE:   EKKO_table-bedat,'|',
+               EKKO_table-ekorg,'|'.
+      EXIT.
+      ENDLOOP.
+  ENDIF.
+ENDLOOP.
+ELSE.
+  WRITE 'error: инициализации таблиц'.
+ENDIF.
 
 ENDFORM.
 
+FORM EKPO_diff_MAKT.
+
+  DATA result_table LIKE Z24_EKPO_MAKT occurs 100 WITH HEADER LINE.
+
+  SELECT EBELN MATNR TXZ01 MAKTX MAKTG BEDAT WERKS EKORG
+    up to i_rows rows
+    FROM Z24_EKPO_MAKT
+    INTO TABLE result_table
+    WHERE: ( MAKTX <> Z24_EKPO_MAKT~TXZ01 and MAKTG <> Z24_EKPO_MAKT~TXZ01 ) and EBELN in s_EBELN and BEDAT in s_BEDAT and WERKS in s_WERKS and EKORG in s_EKORG.
+  IF result_table IS NOT INITIAL.
+    LOOP AT result_table.
+      WRITE: / result_table-ebeln,'|', result_table-matnr,'|', result_table-txz01,'|', result_table-maktx,'|', result_table-maktg,'|', result_table-bedat,'|', result_table-werks,'|',result_table-ekorg,'|'.
+    ENDLOOP.
+  ENDIF.
+
+
+
+
+  ENDFORM.
 ****поиск неразрывного пробела******************************************************************
 *
 *TABLES MAKT.
