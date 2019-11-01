@@ -6,7 +6,7 @@
 *&
 *&---------------------------------------------------------------------*
 
-REPORT  Z24_TESTBAX.
+REPORT  Z24_TESTBAX MESSAGE-ID Z24_STUDY_ERROR.
 
 *****записи*****************************************************************************
 *
@@ -382,13 +382,13 @@ REPORT  Z24_TESTBAX.
 TABLES: EKPO, MAKT, EKKO.
 SELECT-OPTIONS: s_EBELN FOR EKPO-EBELN DEFAULT '45*' OPTION CP, s_BEDAT FOR EKKO-BEDAT, s_WERKS FOR EKPO-WERKS, s_EKORG FOR EKKO-EKORG .
 PARAMETERS: i_rows TYPE i DEFAULT 100.
-
 *
 *проверка введенных данных
-IF i_rows > 0 or i_rows = ''. PERFORM EKPO_diff_MAKT. ELSE. WRITE 'error: количество строк должно быть больше или равно 0'.
-  ENDIF.
+*AT SELECTION-SCREEN on i_rows.
+  IF i_rows > 0 or i_rows = ''. PERFORM EKPO_diff_MAKT. ELSE. MESSAGE e001." WITH 'The number of rows must be 0 or more'(004).
+    ENDIF.
 
-FORM EKPO_diff_MAKT_old.
+FORM EKPO_diff_MAKT_old1. "врмя исполнения 82 с.
 DATA: BEGIN OF result_table occurs 100, "поставить 0 для того чтобы сама выделила память
   ebeln TYPE EKPO-EBELN, "заказы
   matnr TYPE EKPO-MATNR, "номер материала
@@ -409,7 +409,7 @@ select EKPO~EBELN EKPO~MATNR EKPO~TXZ01 MAKT~MAKTX MAKT~MAKTG EKKO~BEDAT EKPO~WE
   ENDSELECT.
   ENDFORM.
 
-FORM EKPO_diff_MAKT_old2.
+FORM EKPO_diff_MAKT_old2. "врмя исполнения 47 с.
 
 TYPES:
   BEGIN OF EKKO_table,
@@ -436,7 +436,7 @@ SELECT EKPO~EBELN EKPO~MATNR EKPO~TXZ01 EKPO~WERKS MAKT~MAKTX MAKT~MAKTG
   up to i_rows rows
   FROM EKPO INNER JOIN MAKT ON MAKT~MATNR = EKPO~MATNR
   into TABLE EKPOMAKT_table
-  WHERE: MAKT~SPRAS = 'RU' and ( MAKT~MAKTX <> EKPO~TXZ01 and MAKT~MAKTG <> EKPO~TXZ01 ) and EKPO~EBELN in s_EBELN and EKPO~WERKS in s_WERKS
+  WHERE: MAKT~SPRAS = 'RU' and ( EKPO~TXZ01 <> MAKT~MAKTX and EKPO~TXZ01 <> MAKT~MAKTG ) and EKPO~EBELN in s_EBELN and EKPO~WERKS in s_WERKS
   ORDER BY EKPO~EBELN.
 
 IF EKPOMAKT_table[] IS NOT INITIAL.
@@ -457,7 +457,7 @@ SELECT EKKO~EBELN EKKO~BEDAT EKKO~EKORG
 *  MODIFY: EKPOMAKT_table INDEX sy-tabix.
 *  ENDSELECT.
   else.
-    WRITE 'error: инициализации EKPOMAKT_table'.  EXIT.
+    MESSAGE e002.
 ENDIF.
 
 IF EKPOMAKT_table[] IS NOT INITIAL and EKKO_table[] IS NOT INITIAL. "рисуем результат
@@ -481,30 +481,68 @@ LOOP AT EKPOMAKT_table.
   ENDIF.
 ENDLOOP.
 ELSE.
-  WRITE 'error: инициализации таблиц'.
+  MESSAGE e002.
 ENDIF.
 
 ENDFORM.
 
-FORM EKPO_diff_MAKT.
+FORM EKPO_diff_MAKT_old_3. "врмя исполнения 25.5 с. без сортировки, 26.4 с. с сортировкой
 
   DATA result_table LIKE Z24_EKPO_MAKT occurs 100 WITH HEADER LINE.
 
-  SELECT EBELN MATNR TXZ01 MAKTX MAKTG BEDAT WERKS EKORG
+  SELECT Z24_EKPO_MAKT~EBELN Z24_EKPO_MAKT~MATNR Z24_EKPO_MAKT~EBELP Z24_EKPO_MAKT~TXZ01 Z24_EKPO_MAKT~MAKTX Z24_EKPO_MAKT~MAKTG Z24_EKPO_MAKT~WERKS Z24_EKPO_MAKT~BEDAT Z24_EKPO_MAKT~EKORG
     up to i_rows rows
     FROM Z24_EKPO_MAKT
-    INTO TABLE result_table
-    WHERE: ( MAKTX <> Z24_EKPO_MAKT~TXZ01 and MAKTG <> Z24_EKPO_MAKT~TXZ01 ) and EBELN in s_EBELN and BEDAT in s_BEDAT and WERKS in s_WERKS and EKORG in s_EKORG.
-  IF result_table IS NOT INITIAL.
+    INTO CORRESPONDING FIELDS OF TABLE result_table
+    WHERE: EBELN in s_EBELN AND TXZ01 <> Z24_EKPO_MAKT~MAKTX AND TXZ01 <> Z24_EKPO_MAKT~MAKTG AND WERKS in s_WERKS and BEDAT in s_BEDAT and EKORG in s_EKORG.
+    
+  SORT result_table.
+  IF result_table[] IS NOT INITIAL.
     LOOP AT result_table.
-      WRITE: / result_table-ebeln,'|', result_table-matnr,'|', result_table-txz01,'|', result_table-maktx,'|', result_table-maktg,'|', result_table-bedat,'|', result_table-werks,'|',result_table-ekorg,'|'.
+    WRITE: / result_table-ebeln,'|', result_table-matnr,'|', result_table-ebelp,'|', result_table-txz01,'|', result_table-maktx,'|', result_table-maktg,'|', result_table-werks,'|', result_table-bedat,'|',result_table-ekorg,'|'.
     ENDLOOP.
+    ELSE.
+      MESSAGE e002.
   ENDIF.
 
 
+  ENDFORM.
 
+FORM EKPO_diff_MAKT. "врмя исполнения 22~24 с. (первоначально 89 с. было)
+
+  DATA: EKPOEKKO LIKE Z24_EKPO_EKKO occurs 100 WITH HEADER LINE,
+        l_MAKT LIKE MAKT." occurs 100 WITH HEADER LINE.
+
+  SELECT Z24_EKPO_EKKO~EBELN Z24_EKPO_EKKO~MATNR Z24_EKPO_EKKO~EBELP Z24_EKPO_EKKO~TXZ01 Z24_EKPO_EKKO~WERKS Z24_EKPO_EKKO~SPRAS Z24_EKPO_EKKO~BEDAT Z24_EKPO_EKKO~EKORG
+    up to i_rows rows "в этой форме работает не корректно
+    FROM Z24_EKPO_EKKO
+    INTO CORRESPONDING FIELDS OF TABLE EKPOEKKO
+    WHERE: EBELN in s_EBELN AND WERKS in s_WERKS and BEDAT in s_BEDAT and EKORG in s_EKORG
+    ORDER BY EBELN.
+
+  LOOP AT EKPOEKKO.
+    SELECT SINGLE *
+      FROM MAKT
+      INTO l_MAKT
+      WHERE: MATNR = EKPOEKKO-matnr AND SPRAS = EKPOEKKO-spras. "AND MAKTX <> EKPOEKKO-TXZ01 AND MAKTG <> EKPOEKKO-TXZ01.
+
+      IF sy-subrc = 0 and l_MAKT-MAKTX <> EKPOEKKO-TXZ01 AND l_MAKT-MAKTG <> EKPOEKKO-TXZ01.
+        WRITE: / EKPOEKKO-ebeln,'|',
+                 EKPOEKKO-ebelp,'|',
+                 EKPOEKKO-txz01,'|',
+                   l_MAKT-matnr,'|',
+                   l_MAKT-maktx,'|',
+                   l_MAKT-maktg,'|',
+                 EKPOEKKO-werks,'|',
+                 EKPOEKKO-bedat,'|',
+                 EKPOEKKO-ekorg,'|'.
+      ENDIF.
+      CLEAR l_MAKT.
+  ENDLOOP.
 
   ENDFORM.
+
+
 ****поиск неразрывного пробела******************************************************************
 *
 *TABLES MAKT.
