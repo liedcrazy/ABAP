@@ -32,11 +32,11 @@ REPORT  Z24_TESTBAX MESSAGE-ID Z24_STUDY_ERROR.
 
 *****дата*****************************************************************************
 *
-*data ultimo type d.
+*data: ultimo type d, str(10).
 *ultimo = sy-datum.      "текущая дата
-*ultimo+6(2) = '01'.     "меняем число на 01(YYYYMMDD) и потом
+*ultimo+6(2) = '01'.     "меняем число на 01(YYYYMMDD)
 *subtract 1 from ultimo. "смещяемся на 1 день назад
-*write / ultimo.
+*write (4)  ultimo.
 *write (10) ultimo.
 *ultimo = sy-datum + 7. "через неделю
 *ultimo(4) = ultimo(4) + 7. "через 7 лет
@@ -240,6 +240,8 @@ REPORT  Z24_TESTBAX MESSAGE-ID Z24_STUDY_ERROR.
 *WRITE: /, AT (8) '123456' COLOR COL_KEY USING EDIT MASK '__:__:__' .
 *WRITE: / 'original text'(001),"текст на первом языке
 *       / text-002.            "текст на втором языке
+*TOP-OF-PAGE." верхний колонтитул
+*end-of-PAGE."нижнний
 
 ****события условия циклы******************************************************************
 *
@@ -260,6 +262,23 @@ REPORT  Z24_TESTBAX MESSAGE-ID Z24_STUDY_ERROR.
 *    WHEN 1. WRITE: / 'Молодец! ' COLOR COL_GROUP, i .
 *    WHEN OTHERS. WRITE: / 'Молодец! ' COLOR COL_NEGATIVE, i .
 *  ENDCASE.
+*
+"write '' HOTSPOT ON. - для смены курсора в руку
+*"пример обработки двойного нажатия по выбранной строке
+*WRITE: 'рисуем таблицу'. HIDE: result_table-ebeln, result_table-ebelp. "сохраняем в Hide Area для оброботки выбранной строки
+*AT LINE-SELECTION.
+*  WINDOW STARTING AT 10 10 ENDING AT 20 20.
+*  READ TABLE result_table WITH KEY ebeln = result_table-ebeln ebelp = result_table-ebelp.
+*  WRITE: / result_table-werks,'|',
+*           result_table-bedat,'|',
+*           result_table-ekorg,'|'.
+"второй пример по позиции курсора
+*AT LINE-SELECTION. "write '' HOTSPOT ON. - для смены курсора в руку
+*  WINDOW STARTING AT 10 10 ENDING AT 20 20.
+*  GET CURSOR FIELD fieldname VALUE fieldvalue. "возвращает имя поля и его значение
+*  IF sy-subrc = 0 AND fieldname = 'RESULT_TABLE-EBELN'.
+*    WRITE: / 'result: ', fieldvalue.
+*  ENDIF.
 *
 *  IF not i < 0. "эквивалентно not ( i < 0 ). 1)not 2)and 3)or
 *    i = i + 1.
@@ -320,6 +339,13 @@ REPORT  Z24_TESTBAX MESSAGE-ID Z24_STUDY_ERROR.
 *
 *CALL FUNCTION 'SELICT_EKPO_MAKT' EXPORTING i_rows = 50.
 *
+*SUBMIT abap1801 WITH p_date = sy-datum " parameters . вызов программы из программы
+*                WITH s_name IN s_name. " select-option
+*SUBMIT abap1801 VIA SELECTION-SCREEN " вызов экрана параметров
+*                AND RETURN. " возврат к вызывающей программе после выполнения.
+*SUBMIT dsa USING SELECTION-SET 'FIRST_VARIANT'. "запуск с параметрами указанными в первом варианте
+*EXPORT all_cust TO MEMORY id 'cust'."возможно сохранить во вр. память и вызвать в др. прогр.
+*IMPORT all_cust FROM MEMORY id 'cust'.
 
 ****эксп/имп. составн. обьеков******************************************************************
 *
@@ -374,6 +400,8 @@ REPORT  Z24_TESTBAX MESSAGE-ID Z24_STUDY_ERROR.
 *    WRITE: / ttest-row1, ttest-row2, ttest-row3.
 *  ENDLOOP.
 *ENDIF.
+*
+
 
 
 
@@ -382,11 +410,38 @@ REPORT  Z24_TESTBAX MESSAGE-ID Z24_STUDY_ERROR.
 TABLES: EKPO, MAKT, EKKO.
 SELECT-OPTIONS: s_EBELN FOR EKPO-EBELN DEFAULT '45*' OPTION CP, s_BEDAT FOR EKKO-BEDAT, s_WERKS FOR EKPO-WERKS, s_EKORG FOR EKKO-EKORG .
 PARAMETERS: i_rows TYPE i DEFAULT 100.
-*
+DATA result_table LIKE Z24_EKPO_MAKT occurs 100 WITH HEADER LINE.
+DATA: fieldname(30),
+      fieldvalue(40) TYPE c.
+
 *проверка введенных данных
 *AT SELECTION-SCREEN on i_rows.
-  IF i_rows > 0 or i_rows = ''. PERFORM EKPO_diff_MAKT. ELSE. MESSAGE e001." WITH 'The number of rows must be 0 or more'(004).
+  IF i_rows > 0 or i_rows = ''. PERFORM EKPO_diff_MAKT TABLES result_table. ELSE. MESSAGE e001." WITH 'The number of rows must be 0 or more'(004).
     ENDIF.
+WRITE 'result'.
+
+
+AT LINE-SELECTION. "write '' HOTSPOT ON. - для смены курсора в руку
+  GET CURSOR FIELD fieldname VALUE fieldvalue. "возвращает имя поля и его значение по курсору
+  IF sy-subrc = 0.
+      WINDOW STARTING AT 10 10 ENDING AT 50 20.
+  CASE fieldname.
+    WHEN 'RESULT_TABLE-EBELN'. "имя писать заглавными
+      IF sy-subrc = 0.
+      WRITE: / 'result: ', fieldvalue.
+      ENDIF.
+    WHEN 'RESULT_TABLE-MATNR'.
+      READ TABLE result_table WITH KEY matnr = fieldvalue.
+      IF sy-subrc = 0.
+       WRITE: / 'result: ', result_table-matnr, / ,result_table-maktx, / ,result_table-maktg.
+       "ELSE. "LEAVE SCREEN.
+       ENDIF.
+    WHEN OTHERS.
+  ENDCASE.
+
+  ENDIF.
+
+
 
 FORM EKPO_diff_MAKT_old1. "врмя исполнения 82 с.
 DATA: BEGIN OF result_table occurs 100, "поставить 0 для того чтобы сама выделила память
@@ -486,21 +541,28 @@ ENDIF.
 
 ENDFORM.
 
-FORM EKPO_diff_MAKT_old_3. "врмя исполнения 25.5 с. без сортировки, 26.4 с. с сортировкой
-
-  DATA result_table LIKE Z24_EKPO_MAKT occurs 100 WITH HEADER LINE.
+FORM EKPO_diff_MAKT TABLES result_table STRUCTURE result_table. "врмя исполнения 25.5 с. без сортировки, 26.4 с. с сортировкой
 
   SELECT Z24_EKPO_MAKT~EBELN Z24_EKPO_MAKT~MATNR Z24_EKPO_MAKT~EBELP Z24_EKPO_MAKT~TXZ01 Z24_EKPO_MAKT~MAKTX Z24_EKPO_MAKT~MAKTG Z24_EKPO_MAKT~WERKS Z24_EKPO_MAKT~BEDAT Z24_EKPO_MAKT~EKORG
     up to i_rows rows
     FROM Z24_EKPO_MAKT
     INTO CORRESPONDING FIELDS OF TABLE result_table
     WHERE: EBELN in s_EBELN AND TXZ01 <> Z24_EKPO_MAKT~MAKTX AND TXZ01 <> Z24_EKPO_MAKT~MAKTG AND WERKS in s_WERKS and BEDAT in s_BEDAT and EKORG in s_EKORG.
-    
+
   SORT result_table.
   IF result_table[] IS NOT INITIAL.
     LOOP AT result_table.
-    WRITE: / result_table-ebeln,'|', result_table-matnr,'|', result_table-ebelp,'|', result_table-txz01,'|', result_table-maktx,'|', result_table-maktg,'|', result_table-werks,'|', result_table-bedat,'|',result_table-ekorg,'|'.
+      WRITE: / result_table-ebeln, sy-vline,
+               result_table-matnr, sy-vline,
+               result_table-ebelp, sy-vline,
+               result_table-txz01, sy-vline,
+*               result_table-maktx,'|',
+*               result_table-maktg,'|',
+               result_table-werks, sy-vline,
+               result_table-bedat, sy-vline,
+               result_table-ekorg, sy-vline.
     ENDLOOP.
+    ULINE.
     ELSE.
       MESSAGE e002.
   ENDIF.
@@ -508,7 +570,7 @@ FORM EKPO_diff_MAKT_old_3. "врмя исполнения 25.5 с. без сор
 
   ENDFORM.
 
-FORM EKPO_diff_MAKT. "врмя исполнения 22~24 с. (первоначально 89 с. было)
+FORM EKPO_diff_MAKT_old4. "врмя исполнения 22~24 с. (первоначально 89 с. было)
 
   DATA: EKPOEKKO LIKE Z24_EKPO_EKKO occurs 100 WITH HEADER LINE,
         l_MAKT LIKE MAKT." occurs 100 WITH HEADER LINE.
@@ -520,6 +582,8 @@ FORM EKPO_diff_MAKT. "врмя исполнения 22~24 с. (первонач�
     WHERE: EBELN in s_EBELN AND WERKS in s_WERKS and BEDAT in s_BEDAT and EKORG in s_EKORG
     ORDER BY EBELN.
 
+"next upd отсартировать и подготовить во внутреннюю табл. до вывода на экран
+IF EKPOEKKO[] IS NOT INITIAL.
   LOOP AT EKPOEKKO.
     SELECT SINGLE *
       FROM MAKT
@@ -539,6 +603,9 @@ FORM EKPO_diff_MAKT. "врмя исполнения 22~24 с. (первонач�
       ENDIF.
       CLEAR l_MAKT.
   ENDLOOP.
+  ELSE.
+    MESSAGE e002.
+  ENDIF.
 
   ENDFORM.
 
