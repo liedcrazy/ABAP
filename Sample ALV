@@ -1,0 +1,188 @@
+*&---------------------------------------------------------------------*
+*& Report  Z24_REPORTBAX
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT  Z24_REPORTBAX.
+
+*  TABLES:Z24_EKPO_MAKT.
+"Types
+TYPES:
+      BEGIN OF t_Z24_EKPO_MAKT,
+        EBELN TYPE Z24_EKPO_MAKT-EBELN,
+        MATNR TYPE Z24_EKPO_MAKT-MATNR,
+        EBELP TYPE Z24_EKPO_MAKT-EBELP,
+        TXZ01 TYPE Z24_EKPO_MAKT-TXZ01,
+      END OF t_Z24_EKPO_MAKT.
+"таблицы для s-o
+TABLES: EKPO, EKKO.
+"Work area
+DATA:
+      w_Z24_EKPO_MAKT TYPE t_Z24_EKPO_MAKT.
+"Internal table
+DATA:
+      i_Z24_EKPO_MAKT TYPE STANDARD TABLE OF t_Z24_EKPO_MAKT.
+"Select option
+SELECT-OPTIONS:
+      s_EBELN FOR EKPO-EBELN DEFAULT '45*' OPTION CP,
+      s_BEDAT FOR EKKO-BEDAT,
+      s_WERKS FOR EKPO-WERKS,
+      s_EKORG FOR EKKO-EKORG.
+PARAMETERS:
+      i_rows TYPE i DEFAULT 100.
+
+*&---------------------------------------------------------------------*
+* ALV Declarations
+*----------------------------------------------------------------------*
+* Types Pools
+TYPE-POOLS:
+   slis.
+* Types
+TYPES:
+   t_fieldcat         TYPE slis_fieldcat_alv,
+   t_events           TYPE slis_alv_event,
+   t_layout           TYPE slis_layout_alv.
+* Workareas
+DATA:
+   w_fieldcat         TYPE t_fieldcat,
+   w_events           TYPE t_events,
+   w_layout           TYPE t_layout.
+* Internal Tables
+DATA:
+   i_fieldcat         TYPE STANDARD TABLE OF t_fieldcat,
+   i_events           TYPE STANDARD TABLE OF t_events.
+*&---------------------------------------------------------------------*
+*&    start of selection
+*&---------------------------------------------------------------------*
+START-OF-SELECTION.
+  PERFORM get_data.
+
+*&---------------------------------------------------------------------*
+*&    end-of-selection.
+*&---------------------------------------------------------------------*
+END-OF-SELECTION.
+
+  PERFORM build_fieldcatlog.
+  PERFORM build_events.
+  PERFORM build_layout.
+  PERFORM list_display.
+*&---------------------------------------------------------------------*
+*&      Form  get_data
+*&---------------------------------------------------------------------*
+FORM get_data .
+
+  SELECT *
+    up to i_rows rows
+    FROM Z24_EKPO_MAKT
+    INTO CORRESPONDING FIELDS OF TABLE i_Z24_EKPO_MAKT
+    WHERE: EBELN in s_EBELN AND TXZ01 <> Z24_EKPO_MAKT~MAKTX AND TXZ01 <> Z24_EKPO_MAKT~MAKTG AND WERKS in s_WERKS and BEDAT in s_BEDAT and EKORG in s_EKORG.
+
+  SORT i_Z24_EKPO_MAKT.
+
+ENDFORM.                    " get_data
+*&---------------------------------------------------------------------*
+*&      Form  build_fieldcatlog
+*&---------------------------------------------------------------------*
+FORM build_fieldcatlog .
+  CLEAR:w_fieldcat,i_fieldcat[].
+
+  PERFORM build_fcatalog USING:
+           'EBELN' 'I_Z24_EKPO_MAKT' 'EBELN',
+           'MATNR' 'I_Z24_EKPO_MAKT' 'MATNR',
+           'EBELP' 'I_Z24_EKPO_MAKT' 'EBELP',
+           'TXZ01' 'I_Z24_EKPO_MAKT' 'TXZ01'.
+
+ENDFORM.                    "BUILD_FIELDCATLOG
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_FCATALOG
+*&---------------------------------------------------------------------*
+FORM build_fcatalog USING l_field l_tab l_text.
+
+  w_fieldcat-fieldname      = l_field.
+  w_fieldcat-tabname        = l_tab.
+  w_fieldcat-seltext_m      = l_text.
+
+  APPEND w_fieldcat TO i_fieldcat.
+  CLEAR w_fieldcat.
+
+ENDFORM.                    " build_fieldcatlog
+*&---------------------------------------------------------------------*
+*&      Form  build_events
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM build_events.
+  CLEAR :
+        w_events, i_events[].
+  w_events-name = 'TOP_OF_PAGE'."Event Name
+  w_events-form = 'TOP_OF_PAGE'."Callback event subroutine
+  APPEND w_events TO i_events.
+  CLEAR  w_events.
+
+ENDFORM.                    "build_events
+*&---------------------------------------------------------------------*
+*&      Form  build_layout
+*&---------------------------------------------------------------------*
+FORM build_layout .
+
+  w_layout-colwidth_optimize = 'X'.
+  w_layout-zebra             = 'X'.
+
+ENDFORM.                    " build_layout
+*&---------------------------------------------------------------------*
+*&      Form  list_display
+*&---------------------------------------------------------------------*
+FORM list_display .
+  DATA:
+        l_program TYPE sy-repid.
+  l_program = sy-repid.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = l_program
+      is_layout          = w_layout
+      it_fieldcat        = i_fieldcat
+      it_events          = i_events
+    TABLES
+      t_outtab           = i_Z24_EKPO_MAKT
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.                    " list_display
+*&---------------------------------------------------------------------*
+*&      Form  top_of_page
+*&---------------------------------------------------------------------*
+FORM top_of_page.
+  DATA :
+   li_header TYPE slis_t_listheader,
+   w_header  LIKE LINE OF li_header.
+  DATA:
+        l_date TYPE char10.
+  WRITE sy-datum TO l_date.
+  w_header-typ  = 'H'.
+  CONCATENATE sy-repid ':' 'From Date' l_date INTO w_header-info SEPARATED BY space.
+  APPEND w_header TO li_header.
+  CLEAR w_header.
+
+  w_header-typ  = 'S'.
+  w_header-info = sy-title.
+  APPEND w_header TO li_header.
+  CLEAR w_header.
+
+  w_header-typ  = 'A'.
+  w_header-info = sy-uname.
+  APPEND w_header TO li_header.
+  CLEAR w_header.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = li_header.
+
+ENDFORM.                    "top_of_page
